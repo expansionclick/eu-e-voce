@@ -8,7 +8,6 @@ window.EEU_SUPABASE_CONFIG = {
   url: "https://gjtrylsooumaedsvvggm.supabase.co",
   anonKey: "sb_publishable_NZZWgCZAWnyG9hZ8-fy7ug_Vp9-jC8XCOLOCA_A_CHAVE_PUBLICA_ANON_OU_PUBLISHABLE",
   allowedEmails: [
-    "tomaseodmira@gmail.com",
-    "SUBSTITUIR-PELO-SEGUNDO-EMAIL-QUANDO-EXISTIR"
+    "tomaseodmira@gmail.com"
   ]
 };
