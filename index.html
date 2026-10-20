@@ -369,7 +369,33 @@ $("#theme").onclick=function(){var r=document.documentElement,dk=r.getAttribute(
 function head(){var am=document.querySelector('meta[name="apple-mobile-web-app-title"]');if(am)am.content=S.title;var e=$("#sT");if(e)e.textContent=S.title;$("#logo").innerHTML="<i>♡</i> "+esc(S.title);$("#title").textContent=S.title;document.title=S.title+" — A nossa história";$("#login").textContent=auth?"Painel":"Iniciar sessão"}
 $("#login").onclick=function(){auth?openAdmin():($("#dl").showModal(),$("#email").focus())};
 document.querySelectorAll("[data-close]").forEach(function(b){b.onclick=function(){b.closest("dialog").close()}});
-$("#lf").onsubmit=async function(e){e.preventDefault();if(!supabaseClient){$("#lm").textContent="A configuração da nuvem ainda não está pronta.";return}$("#lm").textContent="A verificar acesso…";var em=$("#email").value.trim().toLowerCase(),res=await supabaseClient.auth.signInWithPassword({email:em,password:$("#pw").value});if(res.error){$("#lm").textContent="Não foi possível entrar. Confirma o e-mail e a palavra-passe.";return}if(!allowedEmails.includes(em)){await supabaseClient.auth.signOut();$("#lm").textContent="Este e-mail não está autorizado para este álbum.";return}$("#pw").value="";$("#lm").textContent="";$("#dl").close();await activateCloudUser(res.data.user);head();openAdmin();toast("Sessão iniciada")};
+$("#lf").onsubmit=async function(e){
+ e.preventDefault();
+ var msg=$("#lm"),email=$("#email").value.trim().toLowerCase(),password=$("#pw").value;
+ if(!supabaseClient){msg.textContent="A nuvem não está configurada. Verifica se config.js está publicado e contém o URL e a chave pública corretos.";return}
+ if(!email||!password){msg.textContent="Preenche o e-mail e a palavra-passe.";return}
+ msg.textContent="A verificar acesso…";
+ var submit=$("#lf").querySelector('button[type="submit"],button:not([type])');if(submit){submit.disabled=true;submit.textContent="A entrar…"}
+ try{
+   var res=await supabaseClient.auth.signInWithPassword({email:email,password:password});
+   if(res.error){
+     console.error("Erro de autenticação Supabase:",res.error);
+     var emsg=String(res.error.message||"");
+     if(/invalid login credentials/i.test(emsg)) msg.textContent="Credenciais inválidas. Confirma o e-mail e a palavra-passe no Supabase Auth > Users. Se o utilizador foi criado agora, confirma também o e-mail.";
+     else if(/email not confirmed/i.test(emsg)) msg.textContent="Este e-mail ainda não foi confirmado. Abre a mensagem de confirmação enviada pelo Supabase e tenta novamente.";
+     else if(/fetch|network|failed to/i.test(emsg)) msg.textContent="Falha de ligação ao Supabase. Confirma o URL do projeto e a chave publishable/anon em config.js.";
+     else msg.textContent="Erro Supabase: "+emsg;
+     return;
+   }
+   if(!allowedEmails.includes(email)){await supabaseClient.auth.signOut();msg.textContent="O login funcionou, mas este e-mail não está na lista allowedEmails do config.js.";return}
+   $("#pw").value="";
+   await activateCloudUser(res.data.user);
+   msg.textContent="";$("#dl").close();head();openAdmin();toast("Sessão iniciada");
+ }catch(err){
+   console.error("Falha ao iniciar sessão:",err);
+   msg.textContent="A sessão foi autenticada, mas houve um erro ao abrir o álbum: "+(err&&err.message?err.message:"erro inesperado");
+ }finally{if(submit){submit.disabled=false;submit.textContent="Entrar"}}
+};
 function openAdmin(){$("#tt").value=S.title;TK.forEach(function(k){$("#x-"+k).value=T(k)});$("#dm").value=dt(S.met);lockUI();$("#da").showModal();listAll();loadBks()}
 $("#tabs").onclick=function(e){var b=e.target.closest("button");if(!b)return;document.querySelectorAll("#tabs button").forEach(function(x){x.classList.toggle("on",x===b)});document.querySelectorAll(".pn").forEach(function(p){p.classList.toggle("on",p.id===b.dataset.t)})};
 var LM={fp:["photos","cap","date"],fs:["stories","t","d"],fn:["notes","x",""],fc:["clocks","t","d"],fm:["songs","name",""]};
@@ -463,10 +489,26 @@ function packCloud(value){return JSON.parse(JSON.stringify(value,function(k,v){i
 async function hydrateCloud(value){if(typeof value==="string"&&value.indexOf("storage://")===0){var path=value.slice("storage://".length);var r=await supabaseClient.storage.from("album-fotos").createSignedUrl(path,60*60*24*7);if(r.error)throw r.error;signedPathMap[r.data.signedUrl]=path;return r.data.signedUrl}if(Array.isArray(value)){var a=[];for(var i=0;i<value.length;i++)a.push(await hydrateCloud(value[i]));return a}if(value&&typeof value==="object"){var o={};for(var k of Object.keys(value))o[k]=await hydrateCloud(value[k]);return o}return value}
 async function activateCloudUser(user){var em=(user.email||"").toLowerCase();if(!allowedEmails.includes(em)){await supabaseClient.auth.signOut();throw new Error("E-mail não autorizado")}remote=true;canW=true;auth=true;meId=user.id;$("#np").closest("label").style.display="none";$("#acc").textContent="Sessão na nuvem: "+em;await fetchCloudState(true);startCloudSync()}
 async function fetchCloudState(initial){if(!supabaseClient||!remote||cloudLoading)return;cloudLoading=true;try{var q=await supabaseClient.from("album_state").select("payload,updated_at").eq("id",1).maybeSingle();if(q.error)throw q.error;if(q.data&&q.data.updated_at!==lastCloudUpdated){var d=await hydrateCloud(q.data.payload||{});lastCloudUpdated=q.data.updated_at;S=Object.assign({},D,d);base=d;all();resolveNames();tryAlert();if($("#da").open)listAll()}else if(!q.data&&initial){S=Object.assign({},D);await saveCloud(packCloud(S));all()}}catch(e){console.error(e);toast("Não foi possível carregar o álbum. Confirma as políticas do Supabase.")}finally{cloudLoading=false}}
-async function saveCloud(payload){if(!supabaseClient||!remote||cloudSaving)return;cloudSaving=true;try{var q=await supabaseClient.from("album_state").upsert({id:1,payload:payload,updated_at:new Date().toISOString()},{onConflict:"id"});if(q.error)throw q.error;lastCloudUpdated=new Date().toISOString()}catch(e){console.error(e);toast("Erro ao guardar na nuvem. Verifica a ligação e as regras.")}finally{cloudSaving=false}}
+var queuedCloudPayload=null;
+async function saveCloud(payload){
+ if(!supabaseClient||!remote||!canW)return;
+ queuedCloudPayload=payload;
+ if(cloudSaving)return;
+ cloudSaving=true;
+ try{
+   while(queuedCloudPayload){
+     var current=queuedCloudPayload;queuedCloudPayload=null;
+     var stamp=new Date().toISOString();
+     var q=await supabaseClient.from("album_state").upsert({id:1,payload:current,updated_at:stamp},{onConflict:"id"});
+     if(q.error)throw q.error;
+     lastCloudUpdated=stamp;
+   }
+ }catch(e){console.error("Erro ao guardar estado do álbum:",e);toast("Erro ao guardar na nuvem: "+(e&&e.message?e.message:"verifica as políticas do Supabase."))}
+ finally{cloudSaving=false}
+}
 var cloudPoll;
 function startCloudSync(){if(cloudPoll)clearInterval(cloudPoll);cloudPoll=setInterval(function(){if(!document.hidden)fetchCloudState(false)},5000)}
-(async function(){try{var cfg=window.EEU_SUPABASE_CONFIG;if(!cfg||!cfg.url||!cfg.anonKey||!window.supabase){$("#acc").textContent="Configura config.js para ativar a nuvem.";return}allowedEmails=(cfg.allowedEmails||[]).map(function(x){return String(x).trim().toLowerCase()}).filter(function(x){return x&&x.indexOf("SUBSTITUIR-")!==0});supabaseClient=window.supabase.createClient(cfg.url,cfg.anonKey);var ss=await supabaseClient.auth.getSession();if(ss.data.session&&ss.data.session.user){var em=(ss.data.session.user.email||"").toLowerCase();if(allowedEmails.includes(em))await activateCloudUser(ss.data.session.user);else await supabaseClient.auth.signOut()}$("#acc").textContent=remote?"Sessão na nuvem ativa.":"Álbum privado: inicia sessão para ver as memórias."; }catch(e){console.error(e);$("#acc").textContent="A configuração da nuvem precisa de ser verificada."}})();
+(async function(){try{var cfg=window.EEU_SUPABASE_CONFIG;if(!cfg||!cfg.url||!cfg.anonKey||!window.supabase){$("#acc").textContent="Configura config.js para ativar a nuvem.";return}if(!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(String(cfg.url).trim())){throw new Error("O URL do Supabase parece inválido. Usa o Project URL completo, terminado em supabase.co.")}if(!/^(sb_publishable_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.test(String(cfg.anonKey).trim())){throw new Error("A chave parece inválida. Usa a publishable/anon key pública, nunca a service_role/secret key.")}allowedEmails=(cfg.allowedEmails||[]).map(function(x){return String(x).trim().toLowerCase()}).filter(function(x){return x&&x.indexOf("SUBSTITUIR-")!==0});if(!allowedEmails.length){throw new Error("Adiciona pelo menos um e-mail autorizado em allowedEmails no config.js.")}supabaseClient=window.supabase.createClient(cfg.url.trim().replace(/\/$/,""),cfg.anonKey.trim());var ss=await supabaseClient.auth.getSession();if(ss.data.session&&ss.data.session.user){var em=(ss.data.session.user.email||"").toLowerCase();if(allowedEmails.includes(em))await activateCloudUser(ss.data.session.user);else await supabaseClient.auth.signOut()}$("#acc").textContent=remote?"Sessão na nuvem ativa.":"Álbum privado: inicia sessão para ver as memórias."; }catch(e){console.error(e);$("#acc").textContent="Erro de configuração: "+(e&&e.message?e.message:"verifica config.js");$("#lm").textContent="Erro de configuração: "+(e&&e.message?e.message:"verifica config.js")}})();
 </script>
 </body>
 </html>
