@@ -1,9 +1,6 @@
-/*
- * Copia este ficheiro para config.js.
- * Supabase > Project Settings > API: Project URL e chave publicável (anon/publishable).
- * allowedEmails controla a interface; as políticas SQL também têm de conter estes e-mails.
- * A chave publicável pode estar no frontend com RLS correta. Nunca usar service_role/secret.
- */
+// Configuração do álbum Eu e Você
+// Copia a Publishable key do MESMO projeto em Supabase > Settings > API Keys.
+// Nunca coloques sb_secret_ ou service_role neste ficheiro.
 window.EEU_SUPABASE_CONFIG = {
   url: "https://gjtrylsooumaedsvvggm.supabase.co",
   anonKey: "sb_publishable_NZZWgCZAWnyG9hZ8-fy7ug_Vp9-jC8X",
