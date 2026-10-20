@@ -266,11 +266,13 @@ footer .big{font:italic 500 clamp(30px,5vw,44px)/1.15 var(--serif);color:var(--i
 <div class="al" id="al" role="status"></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script>
 var $=function(s){return document.querySelector(s)},KEY="eev_album_v2";
 var D={title:"Eu e Você",pw:"memorias123",met:"",seen:"",photos:[],stories:[],notes:[],clocks:[]};
 var S=load(),auth=false;try{auth=sessionStorage.getItem("eev_auth")==="1"}catch(e){}
-function load(){return Object.assign({},D)}
+function load(){try{return Object.assign({},D,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch(e){return Object.assign({},D)}}
 var lastBk="",ti=0,meId=null,names={},base={},db=null,usr=null,assets=null,canW=false,remote=false,lastJ="";
 function save(){if(remote){if(!canW){toast("Inicia sessão com um e-mail autorizado.");return false}var payload=packCloud(S);lastJ=JSON.stringify(payload);saveCloud(payload);return true}
  toast("A nuvem não está ligada. As alterações não foram sincronizadas.");return false}
@@ -396,8 +398,7 @@ function renderCal(){var y=cm.getFullYear(),m=cm.getMonth(),st=(new Date(y,m,1).
  $("#nxt").innerHTML=nx.length?nx.map(function(x){var dd=Math.round((x.n-td)/864e5);return'<div class="nr"><div><b>'+esc(x.t)+"</b><span>"+x.n.toLocaleDateString("pt-PT",{day:"numeric",month:"long",year:"numeric"})+"</span></div><em>"+(dd===0?"é hoje":dd===1?"falta 1 dia":"faltam "+dd+" dias")+"</em></div>"}).join(""):'<div class="empty">Sem datas por vir. Adiciona aniversários e comemorações no painel.</div>'}
 $("#cp").onclick=function(){cm=new Date(cm.getFullYear(),cm.getMonth()-1,1);renderCal()};$("#cn").onclick=function(){cm=new Date(cm.getFullYear(),cm.getMonth()+1,1);renderCal()};
 function shrinkB(f,m0){return new Promise(function(ok){var r=new FileReader();r.onload=function(){var im=new Image();im.onload=function(){var m=m0||1400,k=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);c.toBlob(ok,"image/jpeg",.82)};im.src=r.result};r.readAsDataURL(f)})}
-async function cloudUploadFile(file){if(!supabaseClient||!remote||!canW)throw new Error("É necessário iniciar sessão para carregar ficheiros.");var ext=(file.type==="image/jpeg"?"jpg":(file.type||"application/octet-stream").split("/")[1]||"bin").replace(/[^a-z0-9]/gi,"");var path=Date.now().toString(36)+"-"+uid()+"."+ext;var up=await supabaseClient.storage.from("album-fotos").upload(path,file,{contentType:file.type||"application/octet-stream",upsert:false});if(up.error)throw up.error;var sg=await supabaseClient.storage.from("album-fotos").createSignedUrl(path,60*60*24*7);if(sg.error)throw sg.error;signedPathMap[sg.data.signedUrl]=path;return sg.data.signedUrl}
-function put(f,m){return shrinkB(f,m).then(function(b){return cloudUploadFile(b)})}
+function put(f,m){return shrinkB(f,m).then(async function(b){if(!supabaseClient||!remote||!canW)throw new Error("É necessário iniciar sessão para carregar ficheiros.");var ext=(b.type==="image/jpeg"?"jpg":(b.type||"application/octet-stream").split("/")[1]||"bin").replace(/[^a-z0-9]/gi,"");var path=Date.now().toString(36)+"-"+uid()+"."+ext;var up=await supabaseClient.storage.from("album-fotos").upload(path,b,{contentType:b.type||"application/octet-stream",upsert:false});if(up.error)throw up.error;var sg=await supabaseClient.storage.from("album-fotos").createSignedUrl(path,60*60*24*7);if(sg.error)throw sg.error;signedPathMap[sg.data.signedUrl]=path;return sg.data.signedUrl})}
 function sure(m,fn){$("#dcm").textContent=m;var d=$("#dc");d.showModal();$("#dcy").onclick=function(){d.close();fn()};$("#dcn").onclick=function(){d.close()}}
 function byT(i){return i&&i.by&&names[i.by]?" · por "+names[i.by]:""}
 function resolveNames(){if(!usr)return;var ids=[];["photos","stories","notes","clocks","dates"].forEach(function(k){(S[k]||[]).forEach(function(i){if(i.by&&ids.indexOf(i.by)<0&&!names[i.by])ids.push(i.by)})});if(!ids.length)return;
@@ -437,7 +438,7 @@ $("#fdf").onsubmit=function(e){e.preventDefault();var f=e.target,k=$("#dk").valu
  else{S.dates=S.dates||[];S.dates.push({id:uid(),t:t,d:v.slice(0,10),y:k==="y",by:meId});save();done()}};
 $("#fzf").onsubmit=function(e){e.preventDefault();S.title=$("#tt").value||D.title;if($("#np").value){S.pw=$("#np").value;$("#np").value=""}save();toast("Guardado");all()};
 $("#exp").onclick=function(){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:"application/json"}));a.download="album-copia.json";a.click()};
-$("#out").onclick=async function(){auth=false;canW=false;remote=false;if(cloudPoll)clearInterval(cloudPoll);if(supabaseClient)await supabaseClient.auth.signOut();S=Object.assign({},D);base={};$("#da").close();all();head();toast("Sessão terminada")};
+$("#out").onclick=async function(){auth=false;canW=false;remote=false;await supabaseClient?.auth.signOut();$("#da").close();head();toast("Sessão terminada")};
 document.body.style.overflow="hidden";
 var AC,mus,seq,built,gain,playing=false,CH=[[261.6,329.6,392,493.9],[220,261.6,329.6,392],[174.6,220,261.6,329.6],[196,246.9,293.7,392]],bi=0;
 function note(f,t,d){var o=AC.createOscillator(),g=AC.createGain();o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.45,t+.06);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(gain);o.start(t);o.stop(t+d)}
@@ -452,7 +453,7 @@ $("#enter").onclick=function(){enter(1)};$("#enterQ").onclick=function(){enter(0
 document.addEventListener("visibilitychange",function(){if(document.hidden){clearTimeout(timer);clearInterval(seq);if(playing){if(mus)mus.pause();if(AC)AC.suspend()}}else{go(idx);if(playing)startMusic()}});
 $("#mf").onchange=function(){var f=this.files[0];if(!f)return;if(f.size>(assets?15e6:3e6)){toast("Ficheiro grande demais.");return}
  var ok2=function(u){S.songs=S.songs||[];var sg={id:uid(),name:f.name.replace(/\.[^.]+$/,""),url:u,by:meId};S.songs.push(sg);if(save()){$("#mf").value="";toast("Música adicionada");listAll();if(playing&&!mus){clearInterval(seq);if(AC)AC.suspend();startMusic()}}else S.songs.pop()};
- cloudUploadFile(f).then(function(u){ok2(u)}).catch(function(){toast("Falha no envio da música. Confirma a sessão e o bucket privado.")})};
+ if(assets)assets.upload(f).then(function(r){ok2(r.url)}).catch(function(){toast("Falha no envio da música.")});else{var r=new FileReader();r.onload=function(){ok2(r.result)};r.readAsDataURL(f)}};
 $("#nm").onclick=function(){delete S.music;S.songs=[];save();if(mus){mus.pause();mus=null}if(playing){clearInterval(seq);startMusic()}listAll();toast("Voltou a melodia de origem")};
 addEventListener("pointerdown",function(e){if(e.target.closest("button,input,textarea,select,dialog,a,.lb,.splash"))return;burstAt(e.clientX,e.clientY,6,120)});
 (function(){try{var c=document.createElement("canvas");c.width=c.height=180;var x=c.getContext("2d"),g=x.createLinearGradient(0,0,180,180);g.addColorStop(0,"#c0405f");g.addColorStop(1,"#3b1e5c");x.fillStyle=g;x.fillRect(0,0,180,180);x.fillStyle="#fff";x.font="600 104px Georgia,serif";x.textAlign="center";x.textBaseline="middle";x.fillText("♡",90,96);$("#ati").href=c.toDataURL("image/png")}catch(e){}})();
